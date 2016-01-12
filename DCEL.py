@@ -143,6 +143,10 @@ class Face:
 class Triangled_DCEL:
     'Planar graph rep via doublely connected edge list'
 
+    def Validate(self):
+        'Some (not exhaustive) internal consistency checks'
+        pass
+
     def __init__(self, labeled_polys, bbox=None):
         """labeled_polys is a list of 2-tuples:
         first element a label, or None
@@ -295,7 +299,3 @@ class Triangled_DCEL:
             #Does this work? Need to ensure that verts with same coords ARE the same vert, and not separate
             #Then we can just plug in only half edges for all specificed polys, and then scan for edges without twins, and create missing twins pointing to the None face
 """
-
-    def Validate(self):
-        'Some (not exhaustive) internal consistency checks'
-        pass
