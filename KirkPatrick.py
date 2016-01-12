@@ -92,12 +92,20 @@ def Query():
 # Assume fixed bounding box BBOX, and list of labeled non-intersecting polygons POLYS
 # Polygon vertices given in CW order
 if __name__ == '__main__':
-    POLYS = [("A", [(110, 20), (120, 50), (110, 90), (140, 70), (180, 30)]),
-             ("B", [(20, 30), (30, 90), (45, 45), (50, 51), (85, 20)]),
-             ("C", [(140, 100), (100, 100), (150, 150)]),
-             ("D", [(140, 100), (150, 150), (180, 100)])]
+    # POLYS = [("A", [(110, 20), (120, 50), (110, 90), (140, 70), (180, 30)]),
+    #          ("B", [(20, 30), (30, 90), (45, 45), (50, 51), (85, 20)]),
+    #          ("C", [(140, 100), (100, 100), (150, 150)]),
+    #          ("D", [(140, 100), (150, 150), (180, 100)])]
     # POLYS = [("B", [(20, 30), (30, 90), (45, 45), (50, 51), (85, 20)])]
     # BBOX = []
+    POLYS = [('A', [(120.0, 50.0), (140.0, 70.0), (110.0, 90.0)]),
+             ('A', [(140.0, 70.0), (120.0, 50.0), (180.0, 30.0)]),
+             ('A', [(120.0, 50.0), (110.0, 20.0), (180.0, 30.0)]),
+             ('B', [(20.0, 30.0), (45.0, 45.0), (30.0, 90.0)]),
+             ('B', [(85.0, 20.0), (50.0, 51.0), (45.0, 45.0)]),
+             ('B', [(20.0, 30.0), (85.0, 20.0), (45.0, 45.0)]),
+             ('C', [(100.0, 100.0), (140.0, 100.0), (150.0, 150.0)]),
+             ('D', [(140.0, 100.0), (180.0, 100.0), (150.0, 150.0)])]
     print POLYS
     raw_polys = [x[1] for x in POLYS]
     # print raw_polys
@@ -117,7 +125,7 @@ if __name__ == '__main__':
     print "Points: ", points
     first_tri = Triangulate(points)
     assert len(first_tri.coplanar) == 0  # Ensure qhull didnt omit any points
-    print "Points: ", first_tri.points
+    print "Points: ", points[first_tri.simplices]
     print "Indices: ", first_tri.simplices
     # Back to our point-tuple structure
     tri_points = [[(pt[0], pt[1]) for pt in tri] for tri in points[first_tri.simplices]]
@@ -135,8 +143,12 @@ if __name__ == '__main__':
     print [x for x in labeled_tris if x[0] == 'B']
     print [x for x in labeled_tris if x[0] == 'C']
     print [x for x in labeled_tris if x[0] == 'D']
+    print [x for x in labeled_tris if x[0] is None]
 
     Display(tri_points, raw_polys)
+
+    first_layer = Triangled_DCEL(labeled_tris, BBOX)
+    first_layer.Validate()
 
 """
     verts = set()

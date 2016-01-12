@@ -145,7 +145,23 @@ class Triangled_DCEL:
 
     def Validate(self):
         'Some (not exhaustive) internal consistency checks'
-        pass
+        for v in self.verts_.itervalues():
+            for e in v.getOuts():
+                assert v == e.getOrigin()
+
+        for e in self.edges_:
+            assert e == e.getNext().getPrev()  # No stand-alone edges
+            assert e == e.getTwin().getTwin()  # No half-edges
+            assert e.getTwin().getOrigin() == e.getNext().getOrigin()
+
+        for f in self.faces_:
+            # Confirm representative edge leads to cycle of edges around f
+            rep_e = f.getBoundary()
+            assert rep_e.getFace() == f
+            cur_e = rep_e.getNext()
+            while rep_e != cur_e:
+                assert cur_e.getFace() == f
+                cur_e = cur_e.getNext()
 
     def __init__(self, labeled_polys, bbox=None):
         """labeled_polys is a list of 2-tuples:
