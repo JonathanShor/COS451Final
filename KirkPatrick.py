@@ -7,6 +7,7 @@ import numpy as np
 import pygame
 from scipy.spatial import Delaunay
 from DCEL import Vertex, Edge, Face, Triangled_DCEL
+from COS451PS1 import CCW
 
 BOXSIZE = 300.
 SCALE = 1.   # Set to 1 for no scaling
@@ -19,14 +20,25 @@ RED =   (255,   0,   0)
 class KP_Layer:
     'Triangulated planar graph rep for one layer of Kirkpatrick pt loc heirarchy'
 
-    def __init__(self, next_layer):
-        self.next_ = next_layer  # Layer below
+    def __init__(self, layer_below, dcel):
+        self.below_ = layer_below  # Layer below
         self.links_ = dict()
+        self.dcel_ = dcel
+
+    def getNext(self):
+        return self.below_
 
     def addLink(self, link):
-        'Add face ID of cur layer, and all faces it links to in next_'
+        'Add face ID of cur layer, and all faces it links to in below_'
         self.links_[link[0]] = link[1]
         # TODO: data validation for link?
+
+    def getLinks(self, label):
+        'Return list of labels pointed to by label'
+        return self.links_[label]
+
+    def getDCEL(self):
+        return self.dcel_
 
 
 def ScaleUp(poly):
@@ -69,6 +81,25 @@ def Display(polys, red_polys=None):
                 done = True  # Flag that we are done so we exit this loop
 
 
+def DisplayDCEL(dcel):
+    pass
+
+
+def Contains(point, poly):
+    'Is point(2-tuple) not outside poly(list of 2-tuples)?'
+    direction = CCW(poly[-1], poly[0], point)
+    for i in range(len(poly) - 1):
+        next_dir = CCW(poly[i], poly[i + 1], point)
+        if next_dir == 0:
+            continue
+        if next_dir != direction:
+            if direction == 0:
+                direction = next_dir
+            else:
+                return False
+    return True
+
+
 def Triangulate(points):
     # points is a list of 2-tuples
     # Can assume this returns a triangulated version of graph
@@ -86,9 +117,9 @@ def LabelTriangle(labeled_polys, triangle):
 
 
 def FindIndSet(layer):
-    'Given a Triangled_DCEL, return an independent set of its non-CH vertices'
-    verts = layer.getVerts()
-    verts -= layer.getBox()
+    'Given a KP_Layer, return an independent set of its non-CH vertices'
+    verts = layer.getDCEL().getVerts()
+    verts -= layer.getDCEL().getBox()
 
     for v in verts:
         if v.getDegree() > 8:
@@ -105,7 +136,8 @@ def FindIndSet(layer):
     return ind_set
 
 
-def FindNextLayer():
+def FindPrevLayer(layer):
+    'Given a KP_Layer, return its parent layer'
     pass
 
 
@@ -175,7 +207,6 @@ if __name__ == '__main__':
     Display(tri_points, raw_polys)
 
     first_layer = Triangled_DCEL(labeled_tris, BBOX)
-    first_layer.Validate()
 
 """
     verts = set()

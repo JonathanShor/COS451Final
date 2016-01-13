@@ -295,6 +295,9 @@ class Triangled_DCEL:
                 self.edges_.update(exterior_edges)
                 self.exterior_done = True
 
+        if __debug__:
+            self.Validate()
+
     def getVertices(self):
         return set(self.verts_.itervalues())
 
@@ -306,3 +309,22 @@ class Triangled_DCEL:
 
     def getBox(self):
         return self.box_
+
+    def getLabeledPolys(self):
+        'Retrieve graph in labeled polygon structure'
+        labeled_polys = []
+        for f in self.getFaces():
+            rep_e = f.getBoundary()
+            verts = [rep_e.getOrigin().getCoords()]
+
+            cur_e = rep_e.getNext()
+            while rep_e != cur_e:
+                verts += [cur_e.getOrigin().getCoords()]
+                cur_e = cur_e.getNext()
+
+            labeled_polys += [(f.getLabel(), verts)]
+        return labeled_polys
+
+    def __deepcopy__(self):
+        'Produce a distinct copy'
+        pass
