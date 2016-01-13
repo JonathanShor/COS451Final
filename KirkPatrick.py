@@ -5,9 +5,7 @@ Created on Jan 8, 2016
 '''
 import numpy as np
 import pygame
-# import COS451.COS451PS1 as CGfund
 from scipy.spatial import Delaunay
-# from COS451.COS451PS1 import CCW
 from DCEL import Vertex, Edge, Face, Triangled_DCEL
 
 BOXSIZE = 300.
@@ -16,6 +14,19 @@ BBOX = [(0., 0.), (BOXSIZE, 0.), (BOXSIZE, BOXSIZE), (0., BOXSIZE)]
 BLACK = (  0,   0,   0)
 WHITE = (255, 255, 255)
 RED =   (255,   0,   0)
+
+
+class KP_Layer:
+    'Triangulated planar graph rep for one layer of Kirkpatrick pt loc heirarchy'
+
+    def __init__(self, next_layer):
+        self.next_ = next_layer  # Layer below
+        self.links_ = dict()
+
+    def addLink(self, link):
+        'Add face ID of cur layer, and all faces it links to in next_'
+        self.links_[link[0]] = link[1]
+        # TODO: data validation for link?
 
 
 def ScaleUp(poly):
@@ -74,8 +85,24 @@ def LabelTriangle(labeled_polys, triangle):
     return None
 
 
-def FindIndSet():
-    pass
+def FindIndSet(layer):
+    'Given a Triangled_DCEL, return an independent set of its non-CH vertices'
+    verts = layer.getVerts()
+    verts -= layer.getBox()
+
+    for v in verts:
+        if v.getDegree() > 8:
+            verts.remove(v)
+
+    ind_set = set()
+    while len(verts) > 0:
+        v = verts.pop()
+        ind_set.add(v)
+        # With degree limited to O(1), getNeighbors is O(1)
+        for w in v.getNeighbors():
+            verts.discard(w)
+
+    return ind_set
 
 
 def FindNextLayer():

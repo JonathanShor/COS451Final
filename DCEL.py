@@ -62,6 +62,12 @@ class Vertex:
     def getDegree(self):
         return len(self.outs_)
 
+    def getNeighbors(self):
+        neighbors = set()
+        for e in self.outs_:
+            neighbors.add(e.getTwin().getOrigin())
+        return neighbors
+
 
 class Edge:
     'Half edge'
@@ -145,16 +151,24 @@ class Triangled_DCEL:
 
     def Validate(self):
         'Some (not exhaustive) internal consistency checks'
-        for v in self.verts_.itervalues():
+        print "Triangled_DCEL.Validation()"
+
+        print "Number of vertices: ", len(self.verts_)
+        for v in self.getVertices():
             for e in v.getOuts():
                 assert v == e.getOrigin()
 
-        for e in self.edges_:
+        assert self.getBox() <= self.getVertices()
+
+        print "Number of half-edges: ", len(self.edges_)
+        for e in self.getEdges():
             assert e == e.getNext().getPrev()  # No stand-alone edges
             assert e == e.getTwin().getTwin()  # No half-edges
             assert e.getTwin().getOrigin() == e.getNext().getOrigin()
 
-        for f in self.faces_:
+        print "Faces: ", len(self.faces_)
+        for f in self.getFaces():
+            print f.getLabel()
             # Confirm representative edge leads to cycle of edges around f
             rep_e = f.getBoundary()
             assert rep_e.getFace() == f
@@ -163,6 +177,7 @@ class Triangled_DCEL:
                 assert cur_e.getFace() == f
                 cur_e = cur_e.getNext()
 
+    # TODO: make bbox NOT optional
     def __init__(self, labeled_polys, bbox=None):
         """labeled_polys is a list of 2-tuples:
         first element a label, or None
@@ -170,20 +185,15 @@ class Triangled_DCEL:
 
         The polygons are assumed to be the triangles of a triangulated planar subdivision.
         bbox, if given, is a list of vertices for the convex hull in CW order.
-
-        [DEPRECIATED: Strictly simple polygons, with the sole exception possibly being bbox
-
-        bbox is optional list of coords for bounding polygon
-        One will be created if none given.
-        If given, must actually contain all polys in labeled_polys,
-        and must consist of vertices strictly distinct from labeled_polys]
         """
         self.verts_ = dict()
         self.edges_ = set()
+        self.faces_ = dict()
+        self.box_ = set()  # Bounding box, subset of verts_
 
         # All faces within the bounding box that are not within a labeled polygon interior
         no_region = Face(None)
-        self.faces_ = set([no_region])
+        self.faces_[no_region.getLabel()] = no_region
 
         if bbox is not None:
             face = no_region
@@ -192,6 +202,8 @@ class Triangled_DCEL:
             for pt in bbox:
                 self.verts_[pt] = Vertex(pt)
                 verts.append(self.verts_[pt])
+
+            self.box_ = set(verts)
 
             # Reverse vertex order to create exterior half edges
             verts = verts[::-1]
@@ -210,15 +222,11 @@ class Triangled_DCEL:
 
             self.edges_.update(edges)
 
-        #     # Scan for needed bbox shape
-        #     first_vert = labeled_polys[0][1][0]  # [First poly][verts of that poly][first vert]
-        #     min_x = first_vert[0]
-        #     max_x = first_vert[0]
-        #     min_y = first_vert[1]
-        #     max_y = first_vert[1]
-
         for poly in labeled_polys:
-            face = Face(poly[0])
+            if poly[0] not in self.faces_:
+                self.faces_[poly[0]] = Face(poly[0])
+            face = self.faces_[poly[0]]
+
             verts = []
             # Create new/identify existing vertices
             for pt in poly[1]:
@@ -287,31 +295,14 @@ class Triangled_DCEL:
                 self.edges_.update(exterior_edges)
                 self.exterior_done = True
 
-"""
-        for poly in labeled_polys:
-            face = Face(poly[0])
-            prev_e = None
-            for pt in poly[1]:
-                if pt in self.verts_:
-                    vert = self.verts_[pt]
-                else:
-                    vert = Vertex(pt)
-                    if bbox is None:
-                        min_x = min([pt[0], min_x])
-                        max_x = max([pt[0], max_x])
-                        min_y = min([pt[1], min_y])
-                        max_y = max([pt[1], max_y])
+    def getVertices(self):
+        return set(self.verts_.itervalues())
 
-                new_e = Edge(vert)
-                new_e.setFace(face)
-                new_e.setPrev(prev_e)
-                prev_e.setNext(new_e)
+    def getEdges(self):
+        return self.edges_
 
-                self.verts_[pt] = vert
-                self.edges_.add(new_e)
+    def getFaces(self):
+        return set(self.faces_.itervalues())
 
-                prev_e = new_e
-
-            #Does this work? Need to ensure that verts with same coords ARE the same vert, and not separate
-            #Then we can just plug in only half edges for all specificed polys, and then scan for edges without twins, and create missing twins pointing to the None face
-"""
+    def getBox(self):
+        return self.box_
