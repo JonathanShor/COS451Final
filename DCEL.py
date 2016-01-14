@@ -3,6 +3,7 @@ Created on Jan 12, 2016
 
 @author: jonathanshor
 '''
+from COS451PS1 import CCW
 
 
 def Contains(point, poly):
@@ -175,7 +176,7 @@ class Triangled_DCEL:
 
         assert self.getBox() <= self.getVertices()
 
-        print "Number of half-edges: ", len(self.edges_)
+        print "Number of (half-)edges: (", len(self.edges_), ")", len(self.edges_)/2
         for e in self.getEdges():
             assert e == e.getNext().getPrev()  # No stand-alone edges
             assert e == e.getTwin().getTwin()  # No half-edges
@@ -183,7 +184,6 @@ class Triangled_DCEL:
 
         print "Faces: ", len(self.faces_)
         for f in self.getFaces():
-            print f.getLabel()
             # Confirm representative edge leads to cycle of edges around f
             rep_e = f.getBoundary()
             assert rep_e.getFace() == f
@@ -319,8 +319,26 @@ class Triangled_DCEL:
     def getEdges(self):
         return self.edges_
 
+    def addEdge(self, e):
+        'Returns 0 if e already in edges_, 1 if e is new'
+        if isinstance(e, Edge):
+            pre_size = len(self.edges_)
+            self.edges_.add(e)
+            return len(self.edges_) - pre_size
+        else:
+            raise TypeError("Bad edge: {}".format(e))
+
     def getFaces(self):
         return set(self.faces_.itervalues())
+
+    def addFace(self, f):
+        'Returns 0 if f already in faces_, 1 if f is new'
+        if isinstance(f, Face):
+            pre_size = len(self.faces_)
+            self.faces_[f.getLabel()] = f
+            return len(self.faces_) - pre_size
+        else:
+            raise TypeError("Bad edge: {}".format(f))
 
     def getBox(self):
         return self.box_
@@ -341,28 +359,35 @@ class Triangled_DCEL:
         return labeled_polys
 
     def removeInteriorVertex(self, v):
-        'Cleanly remove a vertex and retriangulate created star-polygon. Return new-> old face links.'
+        'Cleanly remove a vertex and retriangulate created star-polygon. Return new-> old face links dict().'
         if v in self.box_:
             raise Exception("Cannot remove bounding box vertices.")
 
         # CCW ordering of neighbors and edges from v to each neighbor
         del_edges = [v.getOuts().pop()]
         neighbors = [del_edges[-1].getTwin().getOrigin()]
+        # Final triangle containing v will cover some of all vertices (assuming general position)
+        final_links = [del_edges[-1].getFace()]
         # Exploit strict triangulation to scan around neighborhood of v
         cur_e = del_edges[-1].getPrev().getTwin()
         while cur_e is not del_edges[0]:
+            final_links += [cur_e.getFace()]
             del_edges += [cur_e]
             neighbors += [del_edges[-1].getTwin().getOrigin()]
             cur_e = del_edges[-1].getPrev().getTwin()
-        assert len(del_edges) == len(neighbors)
+        if __debug__:
+            assert len(del_edges) == len(neighbors)
+            print "len(del_edges) == len(neighbors)"
 
-        from COS451PS1 import CCW
+        face_links = {}
         cur_neigh_i = 0
         while len(neighbors) > 3:
+            if __debug__:
+                print len(neighbors)
             prev_neigh = neighbors[cur_neigh_i - 1]
             cur_neigh = neighbors[cur_neigh_i]
-            next_neigh = neighbors[(cur_neigh + 1) % len(neighbors)]
-            turn = CCW(prev_neigh.getOrigin(), cur_neigh.getOrigin(), next_neigh.getOrigin())
+            next_neigh = neighbors[(cur_neigh_i + 1) % len(neighbors)]
+            turn = CCW(prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords())
             if __debug__:
                 assert (turn == -1) or (turn == 1)
             if turn == -1:  # Convex neighbor, ear cutting time
@@ -371,9 +396,10 @@ class Triangled_DCEL:
                     cur_neigh_i += 1
                     continue
 
-                # TODO: Face linking
                 diag = Edge(next_neigh)
+                assert self.addEdge(diag) == 1
                 diag_twin = Edge(prev_neigh)
+                assert self.addEdge(diag_twin) == 1
                 diag.setTwin(diag_twin)
                 diag_twin.setTwin(diag)
 
@@ -381,6 +407,10 @@ class Triangled_DCEL:
                 del_edges = del_edges[:cur_neigh_i] + del_edges[cur_neigh_i + 1:]
                 neighbors = neighbors[:cur_neigh_i] + neighbors[cur_neigh_i + 1:]
                 cur_neigh.removeEdge(to_del.getTwin())
+                del self.faces_[to_del.getFace().getLabel()]
+                del self.faces_[to_del.getTwin().getFace().getLabel()]
+                self.edges_.remove(to_del)
+                self.edges_.remove(to_del.getTwin())
 
                 to_del.getTwin().getNext().setNext(diag_twin)  # a -> h
                 to_del.getTwin().getNext().setPrev(to_del.getPrev())  # f <- a
@@ -396,12 +426,17 @@ class Triangled_DCEL:
                 diag_twin.setPrev(to_del.getTwin().getNext())  # a <- h
 
                 new_face = Face((prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords()))
+                assert self.addFace(new_face) == 1
+                # TODO: Face linking -- check that no duplicate faces from same coords?
+                # Should be impossible, check
+                face_links[new_face] = [to_del.getFace(), to_del.getTwin().getFace()]
                 new_face.setBoundary(diag)
                 diag.setFace(new_face)
                 diag.getNext().setFace(new_face)
                 diag.getPrev().setFace(new_face)
 
                 new_face = Face((prev_neigh.getCoords(), v.getCoords(), next_neigh.getCoords()))
+                assert self.addFace(new_face) == 1
                 new_face.setBoundary(diag_twin)
                 diag_twin.setFace(new_face)
                 diag_twin.getNext().setFace(new_face)
@@ -412,14 +447,21 @@ class Triangled_DCEL:
         # Final 3 neighbors form final triangle
         assert Contains(v.getCoords(), [x.getCoords() for x in neighbors])
         new_face = Face((neighbors[0].getCoords(), neighbors[1].getCoords(), neighbors[2].getCoords()))
+        assert self.addFace(new_face) == 1
+        face_links[new_face] = final_links
         for i in range(3):
             neighbors[i].removeEdge(del_edges[i].getTwin())
             del_edges[i].getNext().setNext(del_edges[(i + 1) % 3].getNext())
             del_edges[i].getNext().setPrev(del_edges[i - 1].getNext())
             del_edges[i].getNext().setFace(new_face)
+            new_face.setBoundary(del_edges[i].getNext())
+            del self.faces_[del_edges[i].getFace().getLabel()]
+            self.edges_.remove(del_edges[i])
+            self.edges_.remove(del_edges[i].getTwin())
 
         # And like that, its gone
-        # TODO: return face links
+        del self.verts_[v.getCoords()]
+        return face_links
 
 
 

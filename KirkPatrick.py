@@ -63,16 +63,34 @@ class KP_Layer:
 
     def __init__(self, layer_below, dcel):
         self.below_ = layer_below  # Layer below
-        self.links_ = dict()
+        self.links_ = dict()    # Keys: Faces, Items: list of Faces
         self.dcel_ = dcel
 
     def getNext(self):
         return self.below_
 
     def addLink(self, link):
-        'Add face ID of cur layer, and all faces it links to in below_'
+        """Add face of cur layer, and all faces it links to in below_.
+           Expects link as a 2-element indexable key,value pair.
+        """
+        if __debug__:
+            assert link[0] in self.dcel_.getFaces()
         self.links_[link[0]] = link[1]
         # TODO: data validation for link?
+
+    def updateLinks(self, links):
+        self.links_.update(links)
+
+    def setLinks(self, links):
+        'Add fully formed links_'
+        if type(links) is dict:
+            if __debug__:
+                faces = self.dcel_.getFaces()
+                for link in links.iter:
+                    assert link[0] in faces
+            self.links_ = links
+        else:
+            raise TypeError("Expected links to be dict, not {}".format(type(links)))
 
     def getLink(self, label):
         'Return list of labels pointed to by label'
@@ -82,7 +100,7 @@ class KP_Layer:
         return self.dcel_
 
     def Display(self):
-        pass
+        Display([x[1] for x in self.dcel_.getLabeledPolys()])
 
 
 def Triangulate(points):
@@ -92,18 +110,14 @@ def Triangulate(points):
     return Delaunay(points)
 
 
-# TODO: Delete, this needs a lot more testing to confirm triangle is inside a non-convex polygon
-def LabelTriangle(labeled_polys, triangle):
-    'triangle is a 3-tuple or list of len 3, each element being a 2-tuple'
-    for i in labeled_polys:
-        if (triangle[0] in i[1]) and (triangle[1] in i[1]) and (triangle[2] in i[1]):
-            return i[0]
-    return None
+def LabelTriangle(triangle):
+    'triangle is a length 3 iterable, each element being a 2-tuple'
+    return (triangle[0], triangle[1], triangle[2])
 
 
 def FindIndieSet(layer):
     'Given a KP_Layer, return an independent set of its non-CH vertices'
-    verts = layer.getDCEL().getVerts()
+    verts = layer.getDCEL().getVertices()
     verts -= layer.getDCEL().getBox()
 
     for v in verts:
@@ -122,12 +136,21 @@ def FindIndieSet(layer):
 
 
 def FindPrevLayer(layer):
-    'Given a KP_Layer, return its parent layer'
+    'Given a KP_Layer, generate and return its parent layer'
     new_layer = KP_Layer(layer, copy.deepcopy(layer.getDCEL()))
     del_verts = FindIndieSet(new_layer)
+    if __debug__:
+        print "del_verts: ", del_verts
+        for v in del_verts:
+            assert del_verts.isdisjoint(v.getNeighbors())
 
     for v in del_verts:
+        print v
         new_links = new_layer.getDCEL().removeInteriorVertex(v)
+        new_layer.updateLinks(new_links)
+        new_layer.getDCEL().Validate()
+
+    return new_layer
 
 
 def ProduceHeirarchy():
@@ -154,7 +177,7 @@ if __name__ == '__main__':
              ('B', [(20.0, 30.0), (85.0, 20.0), (45.0, 45.0)]),
              ('C', [(100.0, 100.0), (140.0, 100.0), (150.0, 150.0)]),
              ('D', [(140.0, 100.0), (180.0, 100.0), (150.0, 150.0)])]
-    print POLYS
+    # print POLYS
     raw_polys = [x[1] for x in POLYS]
     # print raw_polys
 
@@ -170,7 +193,7 @@ if __name__ == '__main__':
     # points = np.array([[pt[0], pt[1]] for pt in raw_polys[0]]) # DELETE THIS
     # print "Points:", points
     Display(raw_polys)
-    print "Points: ", points
+    # print "Points: ", points
     first_tri = Triangulate(points)
     assert len(first_tri.coplanar) == 0  # Ensure qhull didnt omit any points
     print "Points: ", points[first_tri.simplices]
@@ -184,46 +207,17 @@ if __name__ == '__main__':
         tri_points_check.update(tri)
     # print input_pts ^ tri_points_check
     assert input_pts == tri_points_check
+    Display(tri_points, raw_polys)
 
-    labeled_tris = [(LabelTriangle(POLYS, tri), tri) for tri in tri_points]
-    # print "Labeled: "
+    labeled_tris = [(LabelTriangle(tri), tri) for tri in tri_points]
+    print "Labeled tris: ", labeled_tris
     # print [x for x in labeled_tris if x[0] == 'A']
     # print [x for x in labeled_tris if x[0] == 'B']
     # print [x for x in labeled_tris if x[0] == 'C']
     # print [x for x in labeled_tris if x[0] == 'D']
     # print [x for x in labeled_tris if x[0] is None]
 
-    Display(tri_points, raw_polys)
-
-    first_layer = Triangled_DCEL(labeled_tris, BBOX)
-    new_layer = copy.deepcopy(first_layer)
-
-
-""" deepcopy testing
-    print "First layer, rep edge of A degree:"
-    print first_layer.faces_['A'].getBoundary().getOrigin().getDegree()
-    print "New layer, rep edge of A degree:"
-    print new_layer.faces_['A'].getBoundary().getOrigin().getDegree()
-    first_layer.faces_['A'].getBoundary().getOrigin().getOuts().pop()
-    print "First layer, rep edge of A degree after removal:"
-    print first_layer.faces_['A'].getBoundary().getOrigin().getDegree()
-    print "New layer, rep edge of A degree after first layer removal:"
-    print new_layer.faces_['A'].getBoundary().getOrigin().getDegree()
-"""
-
-"""
-    verts = set()
-    verts.add(Vertex((0, 2)))
-    print verts
-    verts.add(Vertex((1, 0)))
-    print verts
-    origin = Vertex((0, 0))
-    e = Edge(origin)
-    verts.add(origin)
-    print verts
-    verts.add(Vertex((0, 0)))
-    print verts
-    print "Origin edges: "
-    for edge in origin.getOuts():
-        print edge.getOrigin()
-"""
+    first_layer = KP_Layer(None, Triangled_DCEL(labeled_tris, BBOX))
+    # first_layer.Display()
+    new_layer = FindPrevLayer(first_layer)
+    new_layer.Display()
