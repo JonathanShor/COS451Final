@@ -377,7 +377,6 @@ class Triangled_DCEL:
             cur_e = del_edges[-1].getPrev().getTwin()
         if __debug__:
             assert len(del_edges) == len(neighbors)
-            print "len(del_edges) == len(neighbors)"
 
         face_links = {}
         cur_neigh_i = 0
@@ -388,8 +387,14 @@ class Triangled_DCEL:
             cur_neigh = neighbors[cur_neigh_i]
             next_neigh = neighbors[(cur_neigh_i + 1) % len(neighbors)]
             turn = CCW(prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords())
-            if __debug__:
+            if turn == 2:   # ABC collinear
+                turn = -1   # Treat as convex corner, satisfies containment metrics for problem
+                if __debug__:
+                    print "Collinear degeneracy: {}, {}, {}".format(prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords())
+            try:
                 assert (turn == -1) or (turn == 1)
+            except AssertionError, e:
+                raise Exception("Turn == {}".format(turn))
             if turn == -1:  # Convex neighbor, ear cutting time
                 # Ensure v not inside new face, otherwise skip for now
                 if Contains(v.getCoords(), [prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords()]):
