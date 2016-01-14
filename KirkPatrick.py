@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import pygame
 from scipy.spatial import Delaunay
-from DCEL import Vertex, Edge, Face, Triangled_DCEL
+import DCEL
 from COS451PS1 import CCW
 
 BOXSIZE = 300.
@@ -92,9 +92,9 @@ class KP_Layer:
         else:
             raise TypeError("Expected links to be dict, not {}".format(type(links)))
 
-    def getLink(self, label):
-        'Return list of labels pointed to by label'
-        return self.links_[label]
+    def getLink(self, f):
+        'Return list of Faces pointed to by f'
+        return self.links_[f]
 
     def getDCEL(self):
         return self.dcel_
@@ -102,12 +102,82 @@ class KP_Layer:
     def Display(self):
         Display([x[1] for x in self.dcel_.getLabeledPolys()])
 
+    def FindIndieSet(self):
+        'Return an independent set of non-CH vertices'
+        verts = self.getDCEL().getVertices()
+        verts -= self.getDCEL().getBox()
 
-def Triangulate(points):
-    # points is a list of 2-tuples
-    # Can assume this returns a triangulated version of graph
-    # return Delaunay(points, qhull_options="Qbb Qc Qz QJ")
-    return Delaunay(points)
+        for v in verts:
+            if v.getDegree() > 8:
+                verts.remove(v)
+
+        ind_set = set()
+        while len(verts) > 0:
+            v = verts.pop()
+            ind_set.add(v)
+            # With degree limited to O(1), getNeighbors is O(1)
+            for w in v.getNeighbors():
+                verts.discard(w)
+
+        return ind_set
+
+    def FindPrevLayer(self):
+        'Generate and return the parent layer of self'
+        new_layer = KP_Layer(self, copy.deepcopy(self.getDCEL()))
+        del_verts = new_layer.FindIndieSet()
+        if __debug__:
+            print "Building next layer"
+            print "del_verts: ", del_verts
+            for v in del_verts:
+                assert del_verts.isdisjoint(v.getNeighbors())
+
+        for v in del_verts:
+            if __debug__:
+                print v
+            new_links = new_layer.getDCEL().removeInteriorVertex(v)
+            new_layer.updateLinks(new_links)
+            if __debug__:
+                new_layer.getDCEL().Validate()
+
+        return new_layer
+
+    def ProduceHierarchy(self):
+        'Generate the full KP hierarchy, and return the top layer.'
+        cur_layer = self
+        while len(cur_layer.getDCEL().getVertices()) > 2 + len(BBOX):
+            cur_layer = cur_layer.FindPrevLayer()
+            if __debug__:
+                cur_layer.Display()
+        return cur_layer
+
+    def Depth(self):
+        'Return number of layers.'
+        next_layer = self.getNext()
+        if next_layer is None:
+            return 1
+        else:
+            return 1 + next_layer.Depth()
+
+    def Query(self, q_point):
+        """Return triangle coordinates (3-tuple of 2-tuples) for bottom layer triangle containing q_point.
+            If __debug__, also displays query progress layer by layer.
+        """
+        search_faces = self.links_.iterkeys()
+        cur_layer = self
+        while cur_layer is not None:           # O(lg n) layers
+            for tri_face in search_faces:             # O(1) search_faces at each layer
+                if DCEL.Contains(q_point, tri_face.getLabel()): # O(1) per Contains() check
+                    search_faces = cur_layer.getLink(tri_face)
+                    cur_layer = cur_layer.getNext()
+                    break   # for loop
+            return None     # q_point not within the bounding box
+        return tri_face.getLabel()
+
+
+
+
+
+
 
 
 def LabelTriangle(triangle):
@@ -115,52 +185,7 @@ def LabelTriangle(triangle):
     return (triangle[0], triangle[1], triangle[2])
 
 
-def FindIndieSet(layer):
-    'Given a KP_Layer, return an independent set of its non-CH vertices'
-    verts = layer.getDCEL().getVertices()
-    verts -= layer.getDCEL().getBox()
-
-    for v in verts:
-        if v.getDegree() > 8:
-            verts.remove(v)
-
-    ind_set = set()
-    while len(verts) > 0:
-        v = verts.pop()
-        ind_set.add(v)
-        # With degree limited to O(1), getNeighbors is O(1)
-        for w in v.getNeighbors():
-            verts.discard(w)
-
-    return ind_set
-
-
-def FindPrevLayer(layer):
-    'Given a KP_Layer, generate and return its parent layer'
-    new_layer = KP_Layer(layer, copy.deepcopy(layer.getDCEL()))
-    del_verts = FindIndieSet(new_layer)
-    if __debug__:
-        print "del_verts: ", del_verts
-        for v in del_verts:
-            assert del_verts.isdisjoint(v.getNeighbors())
-
-    for v in del_verts:
-        print v
-        new_links = new_layer.getDCEL().removeInteriorVertex(v)
-        new_layer.updateLinks(new_links)
-        new_layer.getDCEL().Validate()
-
-    return new_layer
-
-
-def ProduceHeirarchy():
-    pass
-
-
-def Query():
-    pass
-
-# Assume fixed bounding box BBOX, and list of labeled non-intersecting polygons POLYS
+# Assume fixed bounding box BBOX with O(1) vertices, and list of labeled non-intersecting polygons POLYS
 # Polygon vertices given in CW order
 if __name__ == '__main__':
     # POLYS = [("A", [(110, 20), (120, 50), (110, 90), (140, 70), (180, 30)]),
@@ -192,12 +217,14 @@ if __name__ == '__main__':
     points = np.array(list(input_pts))
     # points = np.array([[pt[0], pt[1]] for pt in raw_polys[0]]) # DELETE THIS
     # print "Points:", points
-    Display(raw_polys)
+    # Display(raw_polys)
     # print "Points: ", points
-    first_tri = Triangulate(points)
+    # first_tri = Delaunay(points, qhull_options="Qbb Qc Qz QJ")
+    first_tri = Delaunay(points)
+
     assert len(first_tri.coplanar) == 0  # Ensure qhull didnt omit any points
-    print "Points: ", points[first_tri.simplices]
-    print "Indices: ", first_tri.simplices
+    # print "Points: ", points[first_tri.simplices]
+    # print "Indices: ", first_tri.simplices
     # Back to our point-tuple structure
     tri_points = [[(pt[0], pt[1]) for pt in tri] for tri in points[first_tri.simplices]]
 
@@ -207,21 +234,19 @@ if __name__ == '__main__':
         tri_points_check.update(tri)
     # print input_pts ^ tri_points_check
     assert input_pts == tri_points_check
-    Display(tri_points, raw_polys)
+    # Display(tri_points, raw_polys)
 
     labeled_tris = [(LabelTriangle(tri), tri) for tri in tri_points]
-    print "Labeled tris: ", labeled_tris
-    # print [x for x in labeled_tris if x[0] == 'A']
-    # print [x for x in labeled_tris if x[0] == 'B']
-    # print [x for x in labeled_tris if x[0] == 'C']
-    # print [x for x in labeled_tris if x[0] == 'D']
-    # print [x for x in labeled_tris if x[0] is None]
+    # print "Labeled tris: ", labeled_tris
 
-    first_layer = KP_Layer(None, Triangled_DCEL(labeled_tris, BBOX))
+    first_layer = KP_Layer(None, DCEL.Triangled_DCEL(labeled_tris, BBOX))
+    top_layer = first_layer.ProduceHierarchy()
+    print "Depth: ", top_layer.Depth()
+    # print "(299, 299) contained with: ", top_layer.Query((299, 299))
     # first_layer.Display()
-    new_layer = FindPrevLayer(first_layer)
-    new_layer.Display()
+    # new_layer = FindPrevLayer(first_layer)
+    # new_layer.Display()
 
-    while len(new_layer.getDCEL().getVertices()) > 2 + len(BBOX):
-        new_layer = FindPrevLayer(new_layer)
-        new_layer.Display()
+    # while len(new_layer.getDCEL().getVertices()) > 2 + len(BBOX):
+    #     new_layer = FindPrevLayer(new_layer)
+    #     new_layer.Display()

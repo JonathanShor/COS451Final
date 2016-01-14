@@ -377,7 +377,6 @@ class Triangled_DCEL:
             cur_e = del_edges[-1].getPrev().getTwin()
         if __debug__:
             assert len(del_edges) == len(neighbors)
-            print "len(del_edges) == len(neighbors)"
 
         face_links = {}
         cur_neigh_i = 0
