@@ -393,7 +393,7 @@ class Triangled_DCEL:
             if turn == -1:  # Convex neighbor, ear cutting time
                 # Ensure v not inside new face, otherwise skip for now
                 if Contains(v.getCoords(), [prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords()]):
-                    cur_neigh_i += 1
+                    cur_neigh_i = (cur_neigh_i + 1) % len(neighbors)
                     continue
 
                 diag = Edge(next_neigh)
@@ -406,6 +406,7 @@ class Triangled_DCEL:
                 to_del = del_edges[cur_neigh_i]
                 del_edges = del_edges[:cur_neigh_i] + del_edges[cur_neigh_i + 1:]
                 neighbors = neighbors[:cur_neigh_i] + neighbors[cur_neigh_i + 1:]
+                cur_neigh_i %= len(neighbors)
                 cur_neigh.removeEdge(to_del.getTwin())
                 del self.faces_[to_del.getFace().getLabel()]
                 del self.faces_[to_del.getTwin().getFace().getLabel()]
@@ -442,7 +443,7 @@ class Triangled_DCEL:
                 diag_twin.getNext().setFace(new_face)
                 diag_twin.getPrev().setFace(new_face)
             else:  # Reflex point, skip for now
-                cur_neigh_i += 1
+                cur_neigh_i = (cur_neigh_i + 1) % len(neighbors)
 
         # Final 3 neighbors form final triangle
         assert Contains(v.getCoords(), [x.getCoords() for x in neighbors])

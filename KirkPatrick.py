@@ -221,3 +221,7 @@ if __name__ == '__main__':
     # first_layer.Display()
     new_layer = FindPrevLayer(first_layer)
     new_layer.Display()
+
+    while len(new_layer.getDCEL().getVertices()) > 2 + len(BBOX):
+        new_layer = FindPrevLayer(new_layer)
+        new_layer.Display()
