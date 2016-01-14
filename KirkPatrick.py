@@ -3,6 +3,7 @@ Created on Jan 8, 2016
 
 @author: jonathanshor
 '''
+import copy
 import numpy as np
 import pygame
 from scipy.spatial import Delaunay
@@ -15,30 +16,6 @@ BBOX = [(0., 0.), (BOXSIZE, 0.), (BOXSIZE, BOXSIZE), (0., BOXSIZE)]
 BLACK = (  0,   0,   0)
 WHITE = (255, 255, 255)
 RED =   (255,   0,   0)
-
-
-class KP_Layer:
-    'Triangulated planar graph rep for one layer of Kirkpatrick pt loc heirarchy'
-
-    def __init__(self, layer_below, dcel):
-        self.below_ = layer_below  # Layer below
-        self.links_ = dict()
-        self.dcel_ = dcel
-
-    def getNext(self):
-        return self.below_
-
-    def addLink(self, link):
-        'Add face ID of cur layer, and all faces it links to in below_'
-        self.links_[link[0]] = link[1]
-        # TODO: data validation for link?
-
-    def getLinks(self, label):
-        'Return list of labels pointed to by label'
-        return self.links_[label]
-
-    def getDCEL(self):
-        return self.dcel_
 
 
 def ScaleUp(poly):
@@ -81,23 +58,31 @@ def Display(polys, red_polys=None):
                 done = True  # Flag that we are done so we exit this loop
 
 
-def DisplayDCEL(dcel):
-    pass
+class KP_Layer:
+    'Triangulated planar graph rep for one layer of Kirkpatrick pt loc heirarchy'
 
+    def __init__(self, layer_below, dcel):
+        self.below_ = layer_below  # Layer below
+        self.links_ = dict()
+        self.dcel_ = dcel
 
-def Contains(point, poly):
-    'Is point(2-tuple) not outside poly(list of 2-tuples)?'
-    direction = CCW(poly[-1], poly[0], point)
-    for i in range(len(poly) - 1):
-        next_dir = CCW(poly[i], poly[i + 1], point)
-        if next_dir == 0:
-            continue
-        if next_dir != direction:
-            if direction == 0:
-                direction = next_dir
-            else:
-                return False
-    return True
+    def getNext(self):
+        return self.below_
+
+    def addLink(self, link):
+        'Add face ID of cur layer, and all faces it links to in below_'
+        self.links_[link[0]] = link[1]
+        # TODO: data validation for link?
+
+    def getLink(self, label):
+        'Return list of labels pointed to by label'
+        return self.links_[label]
+
+    def getDCEL(self):
+        return self.dcel_
+
+    def Display(self):
+        pass
 
 
 def Triangulate(points):
@@ -116,7 +101,7 @@ def LabelTriangle(labeled_polys, triangle):
     return None
 
 
-def FindIndSet(layer):
+def FindIndieSet(layer):
     'Given a KP_Layer, return an independent set of its non-CH vertices'
     verts = layer.getDCEL().getVerts()
     verts -= layer.getDCEL().getBox()
@@ -138,7 +123,11 @@ def FindIndSet(layer):
 
 def FindPrevLayer(layer):
     'Given a KP_Layer, return its parent layer'
-    pass
+    new_layer = KP_Layer(layer, copy.deepcopy(layer.getDCEL()))
+    del_verts = FindIndieSet(new_layer)
+
+    for v in del_verts:
+        new_links = new_layer.getDCEL().removeInteriorVertex(v)
 
 
 def ProduceHeirarchy():
@@ -197,16 +186,30 @@ if __name__ == '__main__':
     assert input_pts == tri_points_check
 
     labeled_tris = [(LabelTriangle(POLYS, tri), tri) for tri in tri_points]
-    print "Labeled: "
-    print [x for x in labeled_tris if x[0] == 'A']
-    print [x for x in labeled_tris if x[0] == 'B']
-    print [x for x in labeled_tris if x[0] == 'C']
-    print [x for x in labeled_tris if x[0] == 'D']
-    print [x for x in labeled_tris if x[0] is None]
+    # print "Labeled: "
+    # print [x for x in labeled_tris if x[0] == 'A']
+    # print [x for x in labeled_tris if x[0] == 'B']
+    # print [x for x in labeled_tris if x[0] == 'C']
+    # print [x for x in labeled_tris if x[0] == 'D']
+    # print [x for x in labeled_tris if x[0] is None]
 
     Display(tri_points, raw_polys)
 
     first_layer = Triangled_DCEL(labeled_tris, BBOX)
+    new_layer = copy.deepcopy(first_layer)
+
+
+""" deepcopy testing
+    print "First layer, rep edge of A degree:"
+    print first_layer.faces_['A'].getBoundary().getOrigin().getDegree()
+    print "New layer, rep edge of A degree:"
+    print new_layer.faces_['A'].getBoundary().getOrigin().getDegree()
+    first_layer.faces_['A'].getBoundary().getOrigin().getOuts().pop()
+    print "First layer, rep edge of A degree after removal:"
+    print first_layer.faces_['A'].getBoundary().getOrigin().getDegree()
+    print "New layer, rep edge of A degree after first layer removal:"
+    print new_layer.faces_['A'].getBoundary().getOrigin().getDegree()
+"""
 
 """
     verts = set()

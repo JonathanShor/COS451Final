@@ -5,6 +5,21 @@ Created on Jan 12, 2016
 '''
 
 
+def Contains(point, poly):
+    'Is point(2-tuple) not outside poly(list of 2-tuples)?'
+    direction = CCW(poly[-1], poly[0], point)
+    for i in range(len(poly) - 1):
+        next_dir = CCW(poly[i], poly[i + 1], point)
+        if next_dir == 0:
+            continue
+        if next_dir != direction:
+            if direction == 0:
+                direction = next_dir
+            else:
+                return False
+    return True
+
+
 class Vertex:
     'Vertex'
 
@@ -181,10 +196,10 @@ class Triangled_DCEL:
     def __init__(self, labeled_polys, bbox=None):
         """labeled_polys is a list of 2-tuples:
         first element a label, or None
-        second element a list of 2-tuple vertex coordinates in ClockWise order
+        second element a list of 2-tuple vertex coordinates in CounterClockWise order
 
         The polygons are assumed to be the triangles of a triangulated planar subdivision.
-        bbox, if given, is a list of vertices for the convex hull in CW order.
+        bbox, if given, is a list of vertices for the convex hull in CCW order.
         """
         self.verts_ = dict()
         self.edges_ = set()
@@ -240,7 +255,7 @@ class Triangled_DCEL:
                 new_e = Edge(verts[i])
                 edges.append(new_e)
                 new_e.setFace(face)
-                face.setBoundary(new_e)
+            face.setBoundary(new_e)
 
             assert len(edges) == len(verts)
             # Set Next & Prev links
@@ -274,7 +289,7 @@ class Triangled_DCEL:
 
                 exterior_edges = [new_twin]
                 # Should now be able to follow the exterior loop and set all remaining twins
-                # Follow the loop CW, i.e. reverse the half edge direction
+                # Follow the loop CCW, i.e. reverse the half edge direction
                 while exterior_edges[-1].getOrigin() != e.getOrigin():
                     next_dest = exterior_edges[-1].getOrigin()
                     possible_outs = [x for x in next_dest.getOuts() if x.getTwin() is None]
@@ -325,6 +340,87 @@ class Triangled_DCEL:
             labeled_polys += [(f.getLabel(), verts)]
         return labeled_polys
 
-    def __deepcopy__(self):
-        'Produce a distinct copy'
-        pass
+    def removeInteriorVertex(self, v):
+        'Cleanly remove a vertex and retriangulate created star-polygon. Return new-> old face links.'
+        if v in self.box_:
+            raise Exception("Cannot remove bounding box vertices.")
+
+        # CCW ordering of neighbors and edges from v to each neighbor
+        del_edges = [v.getOuts().pop()]
+        neighbors = [del_edges[-1].getTwin().getOrigin()]
+        # Exploit strict triangulation to scan around neighborhood of v
+        cur_e = del_edges[-1].getPrev().getTwin()
+        while cur_e is not del_edges[0]:
+            del_edges += [cur_e]
+            neighbors += [del_edges[-1].getTwin().getOrigin()]
+            cur_e = del_edges[-1].getPrev().getTwin()
+        assert len(del_edges) == len(neighbors)
+
+        from COS451PS1 import CCW
+        cur_neigh_i = 0
+        while len(neighbors) > 3:
+            prev_neigh = neighbors[cur_neigh_i - 1]
+            cur_neigh = neighbors[cur_neigh_i]
+            next_neigh = neighbors[(cur_neigh + 1) % len(neighbors)]
+            turn = CCW(prev_neigh.getOrigin(), cur_neigh.getOrigin(), next_neigh.getOrigin())
+            if __debug__:
+                assert (turn == -1) or (turn == 1)
+            if turn == -1:  # Convex neighbor, ear cutting time
+                # Ensure v not inside new face, otherwise skip for now
+                if Contains(v.getCoords(), [prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords()]):
+                    cur_neigh_i += 1
+                    continue
+
+                # TODO: Face linking
+                diag = Edge(next_neigh)
+                diag_twin = Edge(prev_neigh)
+                diag.setTwin(diag_twin)
+                diag_twin.setTwin(diag)
+
+                to_del = del_edges[cur_neigh_i]
+                del_edges = del_edges[:cur_neigh_i] + del_edges[cur_neigh_i + 1:]
+                neighbors = neighbors[:cur_neigh_i] + neighbors[cur_neigh_i + 1:]
+                cur_neigh.removeEdge(to_del.getTwin())
+
+                to_del.getTwin().getNext().setNext(diag_twin)  # a -> h
+                to_del.getTwin().getNext().setPrev(to_del.getPrev())  # f <- a
+                to_del.getTwin().getPrev().setNext(to_del.getNext())  # b -> e
+                to_del.getTwin().getPrev().setPrev(diag)  # g <- b
+                to_del.getNext().setNext(diag)  # e -> g
+                to_del.getNext().setPrev(to_del.getTwin().getPrev())  # b <- e
+                to_del.getPrev().setNext(to_del.getTwin().getNext())  # f -> a
+                to_del.getPrev().setPrev(diag_twin)  # h <- f
+                diag.setNext(to_del.getTwin().getPrev())  # g -> b
+                diag.setPrev(to_del.getNext())  # e <- g
+                diag_twin.setNext(to_del.getPrev())  # h -> f
+                diag_twin.setPrev(to_del.getTwin().getNext())  # a <- h
+
+                new_face = Face((prev_neigh.getCoords(), cur_neigh.getCoords(), next_neigh.getCoords()))
+                new_face.setBoundary(diag)
+                diag.setFace(new_face)
+                diag.getNext().setFace(new_face)
+                diag.getPrev().setFace(new_face)
+
+                new_face = Face((prev_neigh.getCoords(), v.getCoords(), next_neigh.getCoords()))
+                new_face.setBoundary(diag_twin)
+                diag_twin.setFace(new_face)
+                diag_twin.getNext().setFace(new_face)
+                diag_twin.getPrev().setFace(new_face)
+            else:  # Reflex point, skip for now
+                cur_neigh_i += 1
+
+        # Final 3 neighbors form final triangle
+        assert Contains(v.getCoords(), [x.getCoords() for x in neighbors])
+        new_face = Face((neighbors[0].getCoords(), neighbors[1].getCoords(), neighbors[2].getCoords()))
+        for i in range(3):
+            neighbors[i].removeEdge(del_edges[i].getTwin())
+            del_edges[i].getNext().setNext(del_edges[(i + 1) % 3].getNext())
+            del_edges[i].getNext().setPrev(del_edges[i - 1].getNext())
+            del_edges[i].getNext().setFace(new_face)
+
+        # And like that, its gone
+        # TODO: return face links
+
+
+
+
