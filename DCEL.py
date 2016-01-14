@@ -367,11 +367,11 @@ class Triangled_DCEL:
         del_edges = [v.getOuts().pop()]
         neighbors = [del_edges[-1].getTwin().getOrigin()]
         # Final triangle containing v will cover some of all vertices (assuming general position)
-        final_links = [del_edges[-1].getFace()]
+        final_links = [del_edges[-1].getFace().getLabel()]
         # Exploit strict triangulation to scan around neighborhood of v
         cur_e = del_edges[-1].getPrev().getTwin()
         while cur_e is not del_edges[0]:
-            final_links += [cur_e.getFace()]
+            final_links += [cur_e.getFace().getLabel()]
             del_edges += [cur_e]
             neighbors += [del_edges[-1].getTwin().getOrigin()]
             cur_e = del_edges[-1].getPrev().getTwin()
@@ -381,8 +381,8 @@ class Triangled_DCEL:
         face_links = {}
         cur_neigh_i = 0
         while len(neighbors) > 3:
-            if __debug__:
-                print len(neighbors)
+            # if __debug__:
+            #     print len(neighbors)
             prev_neigh = neighbors[cur_neigh_i - 1]
             cur_neigh = neighbors[cur_neigh_i]
             next_neigh = neighbors[(cur_neigh_i + 1) % len(neighbors)]
@@ -435,7 +435,7 @@ class Triangled_DCEL:
                 assert self.addFace(new_face) == 1
                 # TODO: Face linking -- check that no duplicate faces from same coords?
                 # Should be impossible, check
-                face_links[new_face] = [to_del.getFace(), to_del.getTwin().getFace()]
+                face_links[new_face.getLabel()] = [to_del.getFace().getLabel(), to_del.getTwin().getFace().getLabel()]
                 new_face.setBoundary(diag)
                 diag.setFace(new_face)
                 diag.getNext().setFace(new_face)
@@ -454,7 +454,7 @@ class Triangled_DCEL:
         assert Contains(v.getCoords(), [x.getCoords() for x in neighbors])
         new_face = Face((neighbors[0].getCoords(), neighbors[1].getCoords(), neighbors[2].getCoords()))
         assert self.addFace(new_face) == 1
-        face_links[new_face] = final_links
+        face_links[new_face.getLabel()] = final_links
         for i in range(3):
             neighbors[i].removeEdge(del_edges[i].getTwin())
             del_edges[i].getNext().setNext(del_edges[(i + 1) % 3].getNext())

@@ -63,20 +63,20 @@ class KP_Layer:
 
     def __init__(self, layer_below, dcel):
         self.below_ = layer_below  # Layer below
-        self.links_ = dict()    # Keys: Faces, Items: list of Faces
+        self.links_ = dict()    # Keys: Face labels, Items: list of Face labels
         self.dcel_ = dcel
 
     def getNext(self):
         return self.below_
 
-    def addLink(self, link):
-        """Add face of cur layer, and all faces it links to in below_.
-           Expects link as a 2-element indexable key,value pair.
-        """
-        if __debug__:
-            assert link[0] in self.dcel_.getFaces()
-        self.links_[link[0]] = link[1]
-        # TODO: data validation for link?
+    # def addLink(self, link):
+    #     """Add face label of cur layer, and all faces it links to in below_.
+    #        Expects link as a 2-element indexable key,value pair.
+    #     """
+    #     if __debug__:
+    #         assert link[0] in self.dcel_.getFaces()
+    #     self.links_[link[0]] = link[1]
+    #     # TODO: data validation for link?
 
     def updateLinks(self, links):
         self.links_.update(links)
@@ -84,17 +84,22 @@ class KP_Layer:
     def setLinks(self, links):
         'Add fully formed links_'
         if type(links) is dict:
-            if __debug__:
-                faces = self.dcel_.getFaces()
-                for link in links.iter:
-                    assert link[0] in faces
+            # if __debug__:
+            #     faces = self.dcel_.getFaces()
+            #     for link in links.iter:
+            #         assert link[0] in faces
             self.links_ = links
         else:
             raise TypeError("Expected links to be dict, not {}".format(type(links)))
 
     def getLink(self, f):
-        'Return list of Faces pointed to by f'
-        return self.links_[f]
+        'Return list of Faces (labels) pointed to by f'
+        try:
+            return self.links_[f]
+        except KeyError, e:
+            print "All keys: {}".format(list(self.links_.iterkeys()))
+            raise e
+
 
     def getDCEL(self):
         return self.dcel_
@@ -107,9 +112,10 @@ class KP_Layer:
         verts = self.getDCEL().getVertices()
         verts -= self.getDCEL().getBox()
 
-        for v in verts:
-            if v.getDegree() > 8:
-                verts.remove(v)
+        # for v in verts:
+        #     if v.getDegree() > 8:
+        #         verts.remove(v)
+        verts -= set([v for v in verts if v.getDegree() > 8])
 
         ind_set = set()
         while len(verts) > 0:
@@ -133,11 +139,32 @@ class KP_Layer:
 
         for v in del_verts:
             if __debug__:
-                print v
+                print v, v.getDegree()
             new_links = new_layer.getDCEL().removeInteriorVertex(v)
             new_layer.updateLinks(new_links)
+            # print "len(new_links): {}".format(len(new_links))
             if __debug__:
                 new_layer.getDCEL().Validate()
+
+        untouched = set([f.getLabel() for f in new_layer.getDCEL().getFaces()]) - set(new_layer.links_.iterkeys())
+        untouched_update = {}
+        for f in untouched:
+            untouched_update[f] = [f]
+        new_layer.updateLinks(untouched_update)
+
+        if __debug__:
+            try:
+                assert set(new_layer.links_.iterkeys()) == set([f.getLabel() for f in new_layer.getDCEL().getFaces()])
+            except AssertionError, e:
+                k = set(new_layer.links_.iterkeys())
+                fs = set([f.getLabel() for f in new_layer.getDCEL().getFaces()])
+                print "keys < faces: {}".format(k < fs)
+                print "New layer keys[{}]: {}".format(len(k), k)
+                print "New layer faces[{}]: {}".format(len(fs), fs)
+                print "Difference[{}]: {}".format(len(k ^ fs), k ^ fs)
+                new_layer.Display()
+                raise e
+
 
         return new_layer
 
@@ -165,13 +192,16 @@ class KP_Layer:
         search_faces = self.links_.iterkeys()
         cur_layer = self
         while cur_layer is not None:           # O(lg n) layers
-            for tri_face in search_faces:             # O(1) search_faces at each layer
-                if DCEL.Contains(q_point, tri_face.getLabel()): # O(1) per Contains() check
-                    search_faces = cur_layer.getLink(tri_face)
+            for tri in search_faces:             # O(1) search_faces at each layer
+                if DCEL.Contains(q_point, tri): # O(1) per Contains() check
+                    if __debug__:
+                        print "At height {}, within face {}.".format(cur_layer.Depth(), tri)
+                    search_faces = cur_layer.getLink(tri)
                     cur_layer = cur_layer.getNext()
                     break   # for loop
-            return None     # q_point not within the bounding box
-        return tri_face.getLabel()
+            else:
+                return None     # q_point not within the bounding box
+        return tri
 
 
 
@@ -241,6 +271,7 @@ if __name__ == '__main__':
 
     first_layer = KP_Layer(None, DCEL.Triangled_DCEL(labeled_tris, BBOX))
     top_layer = first_layer.ProduceHierarchy()
+    print "None is a face label? {}".format(None in [f.getLabel() for f in first_layer.getDCEL().getFaces()])
     print "Depth: ", top_layer.Depth()
     print "(299, 299) contained with: ", top_layer.Query((299, 299))
     # first_layer.Display()
