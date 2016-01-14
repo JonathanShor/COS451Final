@@ -242,7 +242,7 @@ if __name__ == '__main__':
     first_layer = KP_Layer(None, DCEL.Triangled_DCEL(labeled_tris, BBOX))
     top_layer = first_layer.ProduceHierarchy()
     print "Depth: ", top_layer.Depth()
-    # print "(299, 299) contained with: ", top_layer.Query((299, 299))
+    print "(299, 299) contained with: ", top_layer.Query((299, 299))
     # first_layer.Display()
     # new_layer = FindPrevLayer(first_layer)
     # new_layer.Display()
