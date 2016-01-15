@@ -14,8 +14,8 @@ from COS451PS1 import CCW
 
 BENCHMARKING = False
 BOXSIZE = 600.
-SITES = 40
-QUERIES = 5
+SITES = 20
+QUERIES = 1
 SCALE = 1.   # Set to 1 for no scaling
 BBOX = [(0., 0.), (BOXSIZE, 0.), (BOXSIZE, BOXSIZE), (0., BOXSIZE)]
 BLACK = (  0,   0,   0)
@@ -257,8 +257,10 @@ if __name__ == '__main__':
     first_layer = KP_Layer(None, DCEL.Triangled_DCEL(labeled_tris, BBOX))
     top_layer = first_layer.ProduceHierarchy()
     print "DS took {} seconds.".format(time.time() - ds_start)
+    queries_start = time.time()
     for i in range(QUERIES):
         query_start = time.time()
         q_point = (random.randint(1, BOXSIZE - 1), random.randint(1, BOXSIZE - 1))
         print "Query {}: {} contained within: ".format(i, q_point), top_layer.Query(q_point)
         print "Query {} took {} seconds.".format(i, time.time() - query_start)
+    print "All {} queries took {} seconds.".format(QUERIES, time.time() - queries_start)
