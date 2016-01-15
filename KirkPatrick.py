@@ -193,14 +193,16 @@ class KP_Layer:
         cur_layer = self
         while cur_layer is not None:           # O(lg n) layers
             for tri in search_faces:             # O(1) search_faces at each layer
-                if DCEL.Contains(q_point, tri): # O(1) per Contains() check
+                if (tri is not None) and (DCEL.Contains(q_point, tri)): # O(1) per Contains() check
                     if __debug__:
                         print "At height {}, within face {}.".format(cur_layer.Depth(), tri)
-                    search_faces = cur_layer.getLink(tri)
+                    if cur_layer.getNext() is not None:
+                        search_faces = cur_layer.getLink(tri)
                     cur_layer = cur_layer.getNext()
                     break   # for loop
             else:
                 return None     # q_point not within the bounding box
+
         return tri
 
 
