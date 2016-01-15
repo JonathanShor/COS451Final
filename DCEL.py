@@ -24,12 +24,6 @@ def Contains(point, poly):
 class Vertex:
     'Vertex'
 
-    # def __init__(self, coords=None):
-    #     if (coords is None) or (isinstance(coords, tuple)):
-    #         self.coords_ = coords
-    #     else:
-    #         raise TypeError("Bad coords: {}".format(coords))
-    #     self.outs_ = set()
     def __init__(self, coords):
         'Coords are fixed at instantiation'
         if isinstance(coords, tuple):
@@ -294,11 +288,11 @@ class Triangled_DCEL:
                     next_dest = exterior_edges[-1].getOrigin()
                     possible_outs = [x for x in next_dest.getOuts() if x.getTwin() is None]
                     assert len(possible_outs) == 1
-                    f = possible_outs[0]
-                    # TODO: Confirm there's no way f could be a non-exterior edge here
-                    new_twin = Edge(f.getNext().getOrigin())
-                    f.setTwin(new_twin)
-                    new_twin.setTwin(f)
+                    g = possible_outs[0]
+                    assert g.getFace() is not None
+                    new_twin = Edge(g.getNext().getOrigin())
+                    g.setTwin(new_twin)
+                    new_twin.setTwin(g)
                     new_twin.setFace(no_region)
                     exterior_edges.append(new_twin)
                 # Correct order to link Next & Prev
