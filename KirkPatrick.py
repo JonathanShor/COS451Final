@@ -12,8 +12,10 @@ from scipy.spatial import Delaunay
 import DCEL
 from COS451PS1 import CCW
 
+BENCHMARKING = False
 BOXSIZE = 600.
 SITES = 40
+QUERIES = 5
 SCALE = 1.   # Set to 1 for no scaling
 BBOX = [(0., 0.), (BOXSIZE, 0.), (BOXSIZE, BOXSIZE), (0., BOXSIZE)]
 BLACK = (  0,   0,   0)
@@ -71,8 +73,8 @@ def Display(polys, red_polys=None, blue_polys=None, caption=None, green_polys=No
     while not done:
         clock.tick(4)
         for event in pygame.event.get():  # User did something
-            if event.type == pygame.KEYDOWN:
-                done = True
+            # if event.type == pygame.KEYDOWN:
+            #     done = True
             if event.type == pygame.MOUSEBUTTONDOWN:
                 done = True
             if event.type == pygame.QUIT:  # If user clicked close
@@ -207,9 +209,10 @@ class KP_Layer:
         while cur_layer is not None:           # O(lg n) layers
             for tri in search_faces:             # O(1) search_faces at each layer
                 if (tri is not None) and (DCEL.Contains(q_point, tri)): # O(1) per Contains() check
-                    if __debug__:
-                        print "At height {}, within face {}.".format(cur_layer.Depth(), tri)
-                    cur_layer.Display(red_polys=[tri], blue_polys=search_faces, green_polys=[green_spotter_box], caption="{} within face {}".format(q_point, tri))
+                    # if __debug__:
+                    #     print "At height {}, within face {}.".format(cur_layer.Depth(), tri)
+                    if not BENCHMARKING:
+                        cur_layer.Display(red_polys=[tri], blue_polys=[x for x in search_faces if x is not None], green_polys=[green_spotter_box], caption="{} within face {}".format(q_point, tri))
                     if cur_layer.getNext() is not None:
                         search_faces = cur_layer.getLink(tri)
                     cur_layer = cur_layer.getNext()
@@ -249,7 +252,13 @@ if __name__ == '__main__':
 
     labeled_tris = [(LabelTriangle(tri), tri) for tri in tri_points]
 
+    start_time = time.time()
+    ds_start = time.time()
     first_layer = KP_Layer(None, DCEL.Triangled_DCEL(labeled_tris, BBOX))
     top_layer = first_layer.ProduceHierarchy()
-    q_point = (random.randint(1, BOXSIZE - 1), random.randint(1, BOXSIZE - 1))
-    print "{} contained within: ".format(q_point), top_layer.Query(q_point)
+    print "DS took {} seconds.".format(time.time() - ds_start)
+    for i in range(QUERIES):
+        query_start = time.time()
+        q_point = (random.randint(1, BOXSIZE - 1), random.randint(1, BOXSIZE - 1))
+        print "Query {}: {} contained within: ".format(i, q_point), top_layer.Query(q_point)
+        print "Query {} took {} seconds.".format(i, time.time() - query_start)
